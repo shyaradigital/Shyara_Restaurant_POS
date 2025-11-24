@@ -98,8 +98,13 @@ app.use('/api/sessions', sessionRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/menu', menuRoutes);
 
-// Root route
+// Root route - redirect to admin panel
 app.get('/', (req, res) => {
+  res.redirect('/admin.html');
+});
+
+// API info route
+app.get('/api', (req, res) => {
   res.json({ 
     message: 'Order System Backend API',
     status: 'running',
@@ -108,6 +113,10 @@ app.get('/', (req, res) => {
       sessions: '/api/sessions',
       orders: '/api/orders',
       menu: '/api/menu'
+    },
+    frontend: {
+      admin: '/admin.html',
+      customer: '/customer.html?sessionId=YOUR_SESSION_ID'
     },
     timestamp: new Date().toISOString()
   });
