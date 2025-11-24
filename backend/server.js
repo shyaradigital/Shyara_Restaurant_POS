@@ -88,6 +88,11 @@ app.use(express.json());
 // Serve static HTML files from project root
 app.use(express.static(path.join(__dirname, '..')));
 
+// Handle favicon requests to prevent 404 errors
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end(); // No Content - browser will use default
+});
+
 // Routes
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/orders', orderRoutes);
