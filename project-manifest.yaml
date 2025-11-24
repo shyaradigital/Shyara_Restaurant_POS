@@ -1,0 +1,38 @@
+# QR Order System - Project Manifest
+project:
+  name: QR Order System
+  type: web-application
+  stack:
+    backend: Node.js/Express
+    frontend: Vanilla HTML/JS
+    database: SQLite
+
+commands:
+  run:
+    backend: "cd backend && npm start"
+    dev: "cd backend && npm run dev"
+  test: "echo 'No tests configured'"
+  lint: "echo 'No linter configured'"
+  build: "echo 'No build step required'"
+
+dependencies:
+  backend:
+    - express
+    - socket.io
+    - better-sqlite3
+    - qrcode
+    - uuid
+  frontend:
+    - tailwindcss (CDN)
+    - socket.io-client (CDN)
+    - qrcode.js (CDN)
+
+ports:
+  backend: 5000
+  frontend: null
+
+database:
+  type: SQLite
+  file: backend/database.sqlite
+  migrations: false
+

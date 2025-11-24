@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin - Order System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Suppress Tailwind CDN production warning
+        if (window.tailwind) {
+            window.tailwind.config = window.tailwind.config || {};
+            window.tailwind.config.silent = true;
+        }
+    </script>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">Admin Panel</h1>
+                    <p class="text-sm text-gray-500 mt-1">
+                        Connection: <span id="connectionStatus" class="text-red-600">Disconnected</span>
+                    </p>
+                </div>
+
+                <!-- Tabs -->
+                <div class="flex space-x-2 border-b border-gray-200">
+                    <button onclick="showTab('dashboard')" id="tab-dashboard"
+                        class="px-4 py-2 font-medium text-sm border-b-2 border-indigo-600 text-indigo-600">
+                        Dashboard
+                    </button>
+                    <button onclick="showTab('sessions')" id="tab-sessions"
+                        class="px-4 py-2 font-medium text-sm border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                        Sessions
+                    </button>
+                    <button onclick="showTab('menu')" id="tab-menu"
+                        class="px-4 py-2 font-medium text-sm border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                        Menu
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Dashboard Tab -->
+        <div id="dashboard-tab" class="tab-content">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Orders List -->
+                <div class="lg:col-span-2">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h2 class="text-xl font-semibold mb-4">Orders (<span id="ordersCount">0</span>)</h2>
+
+                        <div id="loading" class="text-center py-8">
+                            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                            <p class="text-gray-500 mt-2">Loading orders...</p>
+                        </div>
+
+                        <div id="error" class="text-center py-8 hidden">
+                            <p class="text-red-500 mb-2"></p>
+                            <button onclick="loadOrders()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                                Retry
+                            </button>
+                        </div>
+
+                        <div id="noOrders" class="text-gray-500 text-center py-8 hidden">
+                            No orders yet. Orders will appear here in real-time!
+                        </div>
+
+                        <div id="ordersList" class="space-y-4"></div>
+                    </div>
+                </div>
+
+                <!-- Live Events Feed -->
+                <div class="lg:col-span-1">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h2 class="text-xl font-semibold mb-4">Live Events</h2>
+                        <div id="eventsList" class="space-y-2 max-h-[600px] overflow-y-auto">
+                            <p class="text-gray-500 text-center py-4">No events yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sessions Tab -->
+        <div id="sessions-tab" class="tab-content hidden">
+            <!-- Create Form -->
+            <div id="createForm" class="bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">Create New Session</h2>
+                <form onsubmit="handleCreateSession(event)">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Session Name</label>
+                            <input type="text" id="sessionName"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                placeholder="e.g., Table 5, Counter 1" required />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Table Number (Optional)</label>
+                            <input type="text" id="tableNumber"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                placeholder="e.g., 5" />
+                        </div>
+                    </div>
+                    <button type="submit" id="createSubmitBtn" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50">
+                        Create Session
+                    </button>
+                </form>
+            </div>
+
+
+            <!-- Sessions List -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="p-6 border-b">
+                    <h2 class="text-xl font-semibold">All Sessions (<span id="sessionsCount">0</span>)</h2>
+                </div>
+                <div id="sessionsLoading" class="p-8 text-center">
+                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-2"></div>
+                    <p class="text-gray-500">Loading sessions...</p>
+                </div>
+                <div id="sessionsError" class="p-8 text-center hidden">
+                    <p class="text-red-500 mb-2"></p>
+                    <button onclick="loadSessions()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">Retry</button>
+                </div>
+                <div id="noSessions" class="p-8 text-center text-gray-500 hidden">No sessions created yet. Create your first session to get started.</div>
+                <div id="sessionsList" class="divide-y"></div>
+            </div>
+        </div>
+
+        <!-- Menu Tab -->
+        <div id="menu-tab" class="tab-content hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Add Product -->
+                <div class="lg:col-span-1">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h2 class="text-xl font-semibold mb-4">Manage Menu</h2>
+                        <form id="addProductForm" onsubmit="handleAddProduct(event)">
+                            <div class="mb-3">
+                                <label class="block text-sm font-medium text-gray-700">Product Name</label>
+                                <input id="productName" required class="w-full px-3 py-2 border rounded-lg" placeholder="e.g., Veg Burger" />
+                            </div>
+                            <div class="mb-3">
+                                <label class="block text-sm font-medium text-gray-700">Price (optional)</label>
+                                <input id="productPrice" type="number" min="0" step="0.01" class="w-full px-3 py-2 border rounded-lg" placeholder="e.g., 3.50" />
+                            </div>
+                            <div class="mb-3">
+                                <label class="block text-sm font-medium text-gray-700">Description (optional)</label>
+                                <textarea id="productDesc" class="w-full px-3 py-2 border rounded-lg" rows="3" placeholder="Short description"></textarea>
+                            </div>
+                            <div class="mb-3 flex items-center space-x-3">
+                                <input id="productAvailable" type="checkbox" checked />
+                                <label class="text-sm text-gray-700">Available</label>
+                            </div>
+                            <div>
+                                <button id="addProductBtn" type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Add Product</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Products List -->
+                <div class="lg:col-span-2">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h2 class="text-xl font-semibold mb-4">Products</h2>
+                        <div id="menuLoading" class="text-center py-8">
+                            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                            <p class="text-gray-500 mt-2">Loading menu...</p>
+                        </div>
+                        <div id="menuError" class="text-center py-8 hidden">
+                            <p class="text-red-500 mb-2"></p>
+                            <button onclick="loadMenu()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Retry</button>
+                        </div>
+                        <div id="noProducts" class="text-gray-500 text-center py-8 hidden">No products found. Add the first product above.</div>
+                        <div id="productsList" class="space-y-4"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-detect API URL based on environment
+        const API_URL = window.location.origin;
+        const SOCKET_URL = window.location.origin;
+        const FRONTEND_URL = window.location.origin;
+
+        let socket = null;
+        let orders = [];
+        let customerEvents = [];
+        let sessions = [];
+        let products = [];
+        let selectedSession = null;
+        let reconnectAttempts = 0;
+        let maxReconnectAttempts = 10;
+        let healthCheckInterval = null;
+
+        // ---------- Health & Retry Utilities ----------
+        async function checkBackendHealth() {
+            try {
+                const response = await fetch(`${API_URL}/health`, { method: 'GET', mode: 'cors', cache: 'no-cache' });
+                return response.ok;
+            } catch (e) { return false; }
+        }
+        async function retryWithBackoff(fn, maxRetries = 5, delay = 1000) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const isHealthy = await checkBackendHealth();
+                    if (!isHealthy) throw new Error('Backend not available');
+                    return await fn();
+                } catch (error) {
+                    if (i === maxRetries - 1) throw error;
+                    await new Promise(r => setTimeout(r, delay * Math.pow(2, i)));
+                }
+            }
+        }
+
+        // ---------- Tabs ----------
+        function showTab(tab) {
+            ['dashboard','sessions','menu'].forEach(t => {
+                document.getElementById(`${t}-tab`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).classList.remove('border-indigo-600','text-indigo-600');
+                document.getElementById(`tab-${t}`).classList.add('border-transparent','text-gray-500');
+            });
+            document.getElementById(`${tab}-tab`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).classList.remove('border-transparent','text-gray-500');
+            document.getElementById(`tab-${tab}`).classList.add('border-indigo-600','text-indigo-600');
+
+            if (tab === 'sessions') loadSessions();
+            if (tab === 'dashboard') loadOrders();
+            if (tab === 'menu') loadMenu();
+        }
+
+        // ---------- Socket Initialization ----------
+        function initSocket() {
+            checkBackendHealth().then(isHealthy => {
+                if (!isHealthy) {
+                    document.getElementById('connectionStatus').textContent = 'Backend Offline';
+                    document.getElementById('connectionStatus').className = 'text-red-600';
+                    setTimeout(() => { if (reconnectAttempts < maxReconnectAttempts) { reconnectAttempts++; initSocket(); } }, 3000);
+                    return;
+                }
+
+                if (socket && socket.connected) socket.disconnect();
+
+                socket = io(SOCKET_URL, {
+                    transports: ['websocket','polling'],
+                    reconnection: true,
+                    reconnectionDelay: 1000,
+                    reconnectionDelayMax: 5000,
+                    reconnectionAttempts: Infinity,
+                    timeout: 20000
+                });
+
+                socket.on('connect', () => {
+                    reconnectAttempts = 0;
+                    document.getElementById('connectionStatus').textContent = 'Connected';
+                    document.getElementById('connectionStatus').className = 'text-green-600';
+                    socket.emit('joinAdmin', { userType: 'admin' });
+                    startHealthCheck();
+                });
+
+                socket.on('disconnect', reason => {
+                    document.getElementById('connectionStatus').textContent = 'Disconnected';
+                    document.getElementById('connectionStatus').className = 'text-red-600';
+                    stopHealthCheck();
+                });
+
+                socket.on('connect_error', error => {
+                    document.getElementById('connectionStatus').textContent = 'Connection Error';
+                    document.getElementById('connectionStatus').className = 'text-red-600';
+                });
+
+                // Orders
+                socket.on('newOrder', (data) => {
+                    if (data && data.order) {
+                        const exists = orders.some(o => o.orderId === data.order.orderId);
+                        if (!exists) {
+                            orders.unshift(data.order);
+                            renderOrders();
+                            addEvent({ type: 'newOrder', message: `New order #${data.order.orderId.substring(0,8)}`, timestamp: new Date() });
+                        }
+                    }
+                });
+
+                socket.on('initialOrders', data => {
+                    if (data && data.orders) { orders = data.orders; renderOrders(); }
+                });
+
+                socket.on('orderStatusUpdated', data => {
+                    const idx = orders.findIndex(o => o.orderId === data.orderId);
+                    if (idx !== -1) { orders[idx].status = data.status; renderOrders(); }
+                });
+
+                // Menu updates from other admins/managers or backend
+                socket.on('menuUpdated', () => {
+                    loadMenu().catch(err => console.warn('Failed to reload menu on update:', err));
+                    addEvent({ type: 'menuUpdated', message: 'Menu updated', timestamp: new Date() });
+                });
+
+                socket.on('customerEvent', (data) => {
+                    addEvent({ ...data, timestamp: new Date(data.timestamp || Date.now()) });
+                });
+
+                socket.on('error', (err) => {
+                    console.error('Socket error', err);
+                });
+            });
+        }
+
+        function startHealthCheck() {
+            if (healthCheckInterval) clearInterval(healthCheckInterval);
+            healthCheckInterval = setInterval(async () => {
+                const healthy = await checkBackendHealth();
+                if (!healthy && socket && socket.connected) socket.disconnect();
+            }, 10000);
+        }
+        function stopHealthCheck() { if (healthCheckInterval) { clearInterval(healthCheckInterval); healthCheckInterval = null; } }
+
+        // ---------- Orders (unchanged logic, simplified) ----------
+        async function loadOrders() {
+            try {
+                document.getElementById('loading').classList.remove('hidden');
+                const result = await retryWithBackoff(async () => {
+                    const r = await fetch(`${API_URL}/api/orders/all`, { method: 'GET', mode: 'cors', cache: 'no-cache', headers: { 'Content-Type': 'application/json' } });
+                    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+                    return await r.json();
+                }, 3, 1000);
+                document.getElementById('loading').classList.add('hidden');
+                if (result.success) { orders = result.orders; renderOrders(); } else showError('Failed to load orders');
+            } catch (err) {
+                document.getElementById('loading').classList.add('hidden');
+                showError('Failed to connect to server. ' + (err.message || ''));
+            }
+        }
+
+        function showError(message) {
+            const errorEl = document.getElementById('error');
+            errorEl.querySelector('p').textContent = message;
+            errorEl.classList.remove('hidden');
+        }
+
+        function renderOrders() {
+            const ordersListEl = document.getElementById('ordersList');
+            const noOrdersEl = document.getElementById('noOrders');
+            document.getElementById('ordersCount').textContent = orders.length;
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('error').classList.add('hidden');
+
+            if (!orders || orders.length === 0) {
+                noOrdersEl.classList.remove('hidden');
+                ordersListEl.innerHTML = '';
+                return;
+            }
+            noOrdersEl.classList.add('hidden');
+
+            ordersListEl.innerHTML = orders.map(order => `
+                <div class="border rounded-lg p-4 hover:shadow-md transition">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <p class="font-semibold text-gray-900">Order #${order.orderId.substring(0,8)}</p>
+                            <p class="text-sm text-gray-500">Session: ${order.sessionId.substring(0,8)}</p>
+                            <p class="text-xs text-gray-400 mt-1">${formatDate(order.createdAt)}</p>
+                        </div>
+                        <span class="px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(order.status)}">${order.status}</span>
+                    </div>
+
+                    <div class="mb-3">
+                        <p class="text-sm font-medium text-gray-700 mb-2">Items:</p>
+                        <ul class="space-y-1">
+                            ${order.items.map(item => `<li class="text-sm text-gray-600">${item.quantity}x ${item.itemName} ${item.price>0?`<span class="text-gray-500"> - $${item.price.toFixed(2)}</span>`:''}</li>`).join('')}
+                        </ul>
+                        ${order.totalAmount>0?`<p class="text-sm font-semibold text-gray-900 mt-2">Total: $${order.totalAmount.toFixed(2)}</p>`:''}
+                    </div>
+
+                    ${order.customerNotes?`<p class="text-sm text-gray-600 mb-3 italic">Notes: ${order.customerNotes}</p>`:''}
+
+                    <div class="flex flex-wrap gap-2">
+                        ${['pending','accepted','preparing','ready','completed','cancelled'].map(status => `
+                            <button onclick="handleStatusUpdate('${order.orderId}','${status}')" ${order.status===status?'disabled':''}
+                                class="px-3 py-1 text-xs rounded transition ${order.status===status?'bg-gray-200 text-gray-500 cursor-not-allowed':'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'}">
+                                ${status}
+                            </button>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function handleStatusUpdate(orderId, newStatus) {
+            if (!socket || !socket.connected) { alert('Not connected to server.'); return; }
+            socket.emit('updateOrderStatus', { orderId, status: newStatus, adminNotes: '' });
+            fetch(`${API_URL}/api/orders/${orderId}/status`, { method: 'PUT', mode: 'cors', cache: 'no-cache', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ status: newStatus, adminNotes: '' }) })
+                .catch(e => console.warn('API update failed:', e));
+        }
+
+        function addEvent(ev) {
+            customerEvents.unshift(ev);
+            if (customerEvents.length > 20) customerEvents = customerEvents.slice(0,20);
+            renderEvents();
+        }
+        function renderEvents() {
+            const eventsListEl = document.getElementById('eventsList');
+            if (!customerEvents || customerEvents.length === 0) { eventsListEl.innerHTML = '<p class="text-gray-500 text-center py-4">No events yet</p>'; return; }
+            eventsListEl.innerHTML = customerEvents.map(event => `
+                <div class="border-l-4 border-indigo-500 pl-3 py-2 bg-gray-50 rounded">
+                    <p class="text-sm font-medium text-gray-900">
+                        ${event.type === 'buttonClicked' ? `Button: ${event.buttonLabel}` : ''}
+                        ${event.type === 'itemSelected' ? `Item: ${event.itemName} (${event.selected?'Selected':'Deselected'})` : ''}
+                        ${event.type === 'customerTyping' ? `Customer ${event.isTyping ? 'typing...' : 'stopped typing'}` : ''}
+                        ${event.type === 'newOrder' ? event.message : ''}
+                        ${event.type === 'menuUpdated' ? event.message : ''}
+                    </p>
+                    <p class="text-xs text-gray-500 mt-1">${formatDate(event.timestamp)}</p>
+                </div>
+            `).join('');
+        }
+
+        // ---------- Sessions ----------
+        async function handleCreateSession(e) {
+            e.preventDefault();
+            const name = document.getElementById('sessionName').value;
+            const tableNumber = document.getElementById('tableNumber').value;
+            const submitBtn = document.getElementById('createSubmitBtn');
+            try {
+                submitBtn.disabled = true; submitBtn.textContent = 'Creating...';
+                const result = await retryWithBackoff(async () => {
+                    const r = await fetch(`${API_URL}/api/sessions/create`, { method: 'POST', mode: 'cors', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ name, tableNumber }) });
+                    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+                    return await r.json();
+                }, 3, 1000);
+                if (result.success) { sessions.unshift(result.session); renderSessions(); document.getElementById('sessionName').value=''; document.getElementById('tableNumber').value=''; }
+                else alert(result.error || 'Failed to create session');
+            } catch (err) { alert('Failed to create session. ' + (err.message||'')); console.error(err); }
+            finally { submitBtn.disabled=false; submitBtn.textContent='Create Session'; }
+        }
+
+        async function loadSessions() {
+            try {
+                document.getElementById('sessionsLoading').classList.remove('hidden');
+                const result = await retryWithBackoff(async () => {
+                    const r = await fetch(`${API_URL}/api/sessions/all`, { method: 'GET', mode: 'cors' });
+                    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`); return await r.json();
+                }, 3, 1000);
+                document.getElementById('sessionsLoading').classList.add('hidden');
+                if (result.success) { sessions = result.sessions; renderSessions(); } else showSessionsError('Failed to load sessions');
+            } catch (err) { document.getElementById('sessionsLoading').classList.add('hidden'); showSessionsError('Failed to connect to server. ' + (err.message||'')); }
+        }
+        function showSessionsError(message) { const el = document.getElementById('sessionsError'); el.querySelector('p').textContent = message; el.classList.remove('hidden'); }
+
+        function renderSessions() {
+            const listEl = document.getElementById('sessionsList');
+            const noSessionsEl = document.getElementById('noSessions');
+            document.getElementById('sessionsCount').textContent = sessions.length;
+            if (!sessions || sessions.length === 0) { noSessionsEl.classList.remove('hidden'); listEl.innerHTML=''; return; }
+            noSessionsEl.classList.add('hidden');
+            listEl.innerHTML = sessions.map(session => `
+                <div class="p-6 hover:bg-gray-50 transition">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <h3 class="text-lg font-semibold text-gray-900">${session.name}</h3>
+                            ${session.tableNumber?`<p class="text-sm text-gray-500">Table: ${session.tableNumber}</p>`:''}
+                            <p class="text-xs text-gray-400 mt-1">Created: ${new Date(session.createdAt).toLocaleString()}</p>
+                            <p class="text-xs text-blue-600 mt-2 break-all">${session.customerUrl || `${FRONTEND_URL}/customer.html?sessionId=${session.sessionId}`}</p>
+                        </div>
+                        <div class="ml-4 flex space-x-2">
+                            <button onclick="window.open('${session.customerUrl || `${FRONTEND_URL}/customer.html?sessionId=${session.sessionId}`}','_blank')" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm">Open Customer Page</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ---------- Menu (new) ----------
+        async function loadMenu() {
+            const loadingEl = document.getElementById('menuLoading');
+            const errEl = document.getElementById('menuError');
+            const noEl = document.getElementById('noProducts');
+            const listEl = document.getElementById('productsList');
+            loadingEl.classList.remove('hidden'); errEl.classList.add('hidden'); noEl.classList.add('hidden');
+
+            try {
+                const result = await retryWithBackoff(async () => {
+                    const r = await fetch(`${API_URL}/api/menu`, { method: 'GET', mode: 'cors' });
+                    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+                    return await r.json();
+                }, 3, 1000);
+                loadingEl.classList.add('hidden');
+                if (result.success) {
+                    products = result.products || [];
+                    renderMenu();
+                } else {
+                    showMenuError('Failed to load menu');
+                }
+            } catch (err) {
+                loadingEl.classList.add('hidden');
+                showMenuError('Failed to connect to server. ' + (err.message || ''));
+            }
+        }
+
+        function showMenuError(msg) { const el = document.getElementById('menuError'); el.querySelector('p').textContent = msg; el.classList.remove('hidden'); }
+
+        function renderMenu() {
+            const listEl = document.getElementById('productsList');
+            const noEl = document.getElementById('noProducts');
+            if (!products || products.length === 0) { noEl.classList.remove('hidden'); listEl.innerHTML = ''; return; }
+            noEl.classList.add('hidden');
+            listEl.innerHTML = products.map(p => `
+                <div class="border rounded-lg p-4 flex justify-between items-start">
+                    <div class="flex-1">
+                        <div class="flex justify-between items-start">
+                            <h3 class="text-lg font-semibold text-gray-900">${escapeHtml(p.name)}</h3>
+                            <div class="text-sm ${p.available? 'text-green-700' : 'text-red-600'}">${p.available ? 'Available' : 'Unavailable'}</div>
+                        </div>
+                        ${p.description? `<p class="text-sm text-gray-600 mt-1">${escapeHtml(p.description)}</p>` : ''}
+                        ${typeof p.price === 'number' ? `<p class="text-sm font-semibold text-gray-900 mt-2">$${Number(p.price).toFixed(2)}</p>` : ''}
+                    </div>
+                    <div class="ml-4 flex flex-col gap-2">
+                        <button onclick="handleDeleteProduct('${p.id}')" class="px-3 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Add product
+        async function handleAddProduct(e) {
+            e.preventDefault();
+            const btn = document.getElementById('addProductBtn');
+            const name = document.getElementById('productName').value.trim();
+            const priceRaw = document.getElementById('productPrice').value;
+            const price = priceRaw !== '' ? parseFloat(priceRaw) : 0;
+            const description = document.getElementById('productDesc').value.trim();
+            const available = document.getElementById('productAvailable').checked;
+
+            if (!name) { alert('Product name required'); return; }
+
+            try {
+                btn.disabled = true; btn.textContent = 'Adding...';
+                const payload = { name, price, description, available };
+                const result = await retryWithBackoff(async () => {
+                    const r = await fetch(`${API_URL}/api/menu`, {
+                        method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                    });
+                    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`); return await r.json();
+                }, 3, 1000);
+
+                if (result.success) {
+                    // update local list
+                    products.unshift(result.product);
+                    renderMenu();
+                    // notify connected clients via socket
+                    if (socket && socket.connected) socket.emit('menuUpdated', { source: 'admin', action: 'create', productId: result.product.id });
+                    document.getElementById('addProductForm').reset();
+                } else {
+                    alert(result.error || 'Failed to add product');
+                }
+            } catch (err) {
+                console.error('Add product error', err);
+                alert('Failed to add product. ' + (err.message || ''));
+            } finally {
+                btn.disabled = false; btn.textContent = 'Add Product';
+            }
+        }
+
+        // Delete product
+        async function handleDeleteProduct(productId) {
+            if (!confirm('Delete this product? This action cannot be undone.')) return;
+            try {
+                const r = await fetch(`${API_URL}/api/menu/${productId}`, { method: 'DELETE', mode: 'cors' });
+                if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+                const result = await r.json();
+                if (result.success) {
+                    products = products.filter(p => p.id !== productId);
+                    renderMenu();
+                    if (socket && socket.connected) socket.emit('menuUpdated', { source: 'admin', action: 'delete', productId });
+                } else {
+                    alert(result.error || 'Failed to delete product');
+                }
+            } catch (err) {
+                console.error('Delete product error', err);
+                alert('Failed to delete product. ' + (err.message||''));
+            }
+        }
+
+        // ---------- Utilities ----------
+        function getStatusColor(status) {
+            const colors = {
+                pending: 'bg-yellow-100 text-yellow-800',
+                accepted: 'bg-blue-100 text-blue-800',
+                preparing: 'bg-purple-100 text-purple-800',
+                ready: 'bg-green-100 text-green-800',
+                completed: 'bg-gray-100 text-gray-800',
+                cancelled: 'bg-red-100 text-red-800'
+            };
+            return colors[status] || 'bg-gray-100 text-gray-800';
+        }
+        function formatDate(date) { return new Date(date).toLocaleString(); }
+        function escapeHtml(str) { if (!str && str !== 0) return ''; return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
+
+        // Init
+        window.addEventListener('load', async () => {
+            const isHealthy = await checkBackendHealth();
+            if (!isHealthy) {
+                document.getElementById('connectionStatus').textContent = 'Backend Offline - Retrying...';
+                document.getElementById('connectionStatus').className = 'text-yellow-600';
+            }
+            initSocket();
+            loadOrders();
+            // Preload menu in the background
+            loadMenu().catch(() => {});
+        });
+    </script>
+</body>
+</html>

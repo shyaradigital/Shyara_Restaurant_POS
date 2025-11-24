@@ -1,0 +1,112 @@
+{
+  "projectName": "QR Order System",
+  "language": "JavaScript (Node.js)",
+  "backendPorts": [5000],
+  "frontendPorts": [],
+  "dbType": "SQLite",
+  "envVars": [
+    {
+      "name": "PORT",
+      "required": false,
+      "default": "5000",
+      "description": "Backend server port"
+    },
+    {
+      "name": "FRONTEND_URL",
+      "required": false,
+      "default": "http://localhost:3000",
+      "description": "Frontend URL for QR code generation"
+    },
+    {
+      "name": "NODE_ENV",
+      "required": false,
+      "default": "development",
+      "description": "Environment mode"
+    }
+  ],
+  "endpoints": [
+    {"method": "GET", "path": "/", "auth": false, "description": "API info"},
+    {"method": "GET", "path": "/health", "auth": false, "description": "Health check"},
+    {"method": "GET", "path": "/api/sessions/all", "auth": false, "description": "List all sessions"},
+    {"method": "GET", "path": "/api/sessions/:sessionId", "auth": false, "description": "Get session by ID"},
+    {"method": "POST", "path": "/api/sessions/create", "auth": false, "description": "Create new session"},
+    {"method": "PUT", "path": "/api/sessions/:sessionId", "auth": false, "description": "Update session"},
+    {"method": "DELETE", "path": "/api/sessions/:sessionId", "auth": false, "description": "Delete session"},
+    {"method": "GET", "path": "/api/orders/all", "auth": false, "description": "Get all orders (admin)"},
+    {"method": "GET", "path": "/api/orders/session/:sessionId", "auth": false, "description": "Get orders for session"},
+    {"method": "GET", "path": "/api/orders/:orderId", "auth": false, "description": "Get order by ID"},
+    {"method": "POST", "path": "/api/orders/create", "auth": false, "description": "Create new order"},
+    {"method": "PUT", "path": "/api/orders/:orderId/status", "auth": false, "description": "Update order status"},
+    {"method": "GET", "path": "/api/orders/events/:sessionId", "auth": false, "description": "Get events for session"}
+  ],
+  "mainIssues": [
+    {
+      "severity": "critical",
+      "type": "security",
+      "issue": "No authentication/authorization",
+      "location": "All routes",
+      "impact": "Anyone can modify data"
+    },
+    {
+      "severity": "critical",
+      "type": "security",
+      "issue": "XSS vulnerability",
+      "location": "admin.html, customer.html",
+      "impact": "User input rendered without sanitization"
+    },
+    {
+      "severity": "high",
+      "type": "reliability",
+      "issue": "No database transactions",
+      "location": "Order creation, status updates",
+      "impact": "Data inconsistency risk"
+    },
+    {
+      "severity": "high",
+      "type": "reliability",
+      "issue": "Race conditions",
+      "location": "Concurrent order operations",
+      "impact": "Data corruption possible"
+    },
+    {
+      "severity": "medium",
+      "type": "performance",
+      "issue": "N+1 query problem",
+      "location": "getOrderWithItems function",
+      "impact": "Slow order retrieval"
+    }
+  ],
+  "suggestedFixes": [
+    {
+      "priority": 1,
+      "fix": "Implement authentication middleware",
+      "files": ["backend/routes/orders.js", "backend/routes/sessions.js"],
+      "effort": "high"
+    },
+    {
+      "priority": 2,
+      "fix": "Add input validation",
+      "files": ["backend/routes/orders.js", "backend/routes/sessions.js"],
+      "effort": "medium"
+    },
+    {
+      "priority": 3,
+      "fix": "Sanitize user inputs (XSS)",
+      "files": ["admin.html", "customer.html"],
+      "effort": "low"
+    },
+    {
+      "priority": 4,
+      "fix": "Add database transactions",
+      "files": ["backend/socket/socketHandler.js", "backend/routes/orders.js"],
+      "effort": "medium"
+    },
+    {
+      "priority": 5,
+      "fix": "Fix N+1 queries with JOINs",
+      "files": ["backend/routes/orders.js"],
+      "effort": "low"
+    }
+  ]
+}
+

@@ -1,0 +1,32 @@
+# Render Blueprint for Order System Deployment
+# This file can be used for one-click deployment on Render
+# Go to Render Dashboard > New > Blueprint > Connect this repo
+
+services:
+  - type: web
+    name: order-system-backend
+    env: node
+    region: oregon  # Change to your preferred region (oregon, frankfurt, singapore)
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000  # Render will override this automatically
+      - key: FRONTEND_URL
+        sync: false  # Set this manually after deployment (e.g., https://your-backend-url.onrender.com)
+  
+  - type: web
+    name: order-system-frontend
+    env: static
+    region: oregon
+    plan: free
+    buildCommand: ""  # No build needed for static HTML
+    staticPublishPath: /
+    envVars:
+      - key: API_URL
+        sync: false  # Set to your backend URL (e.g., https://order-system-backend.onrender.com)
+
