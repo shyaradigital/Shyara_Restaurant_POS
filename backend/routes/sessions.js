@@ -4,6 +4,18 @@ import { getDatabase } from '../utils/db.js';
 
 const router = express.Router();
 
+// Helper function to get base URL from request
+const getBaseUrl = (req) => {
+  // Use FRONTEND_URL env var if set (for production)
+  if (process.env.FRONTEND_URL) {
+    return process.env.FRONTEND_URL;
+  }
+  // Otherwise, detect from request (works in all environments)
+  const protocol = req.protocol || (req.headers['x-forwarded-proto'] || 'http').split(',')[0];
+  const host = req.get('host') || req.headers.host;
+  return `${protocol}://${host}`;
+};
+
 // Create a new session
 router.post('/create', async (req, res) => {
   try {
@@ -11,8 +23,8 @@ router.post('/create', async (req, res) => {
     const sessionId = uuidv4();
     const db = getDatabase();
     
-    // Generate customer URL
-    let frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5000';
+    // Generate customer URL using detected base URL
+    const frontendUrl = getBaseUrl(req);
     const customerUrl = `${frontendUrl}/customer.html?sessionId=${sessionId}`;
     
     const now = new Date().toISOString();
@@ -50,7 +62,7 @@ router.post('/create', async (req, res) => {
 // Get all sessions
 router.get('/all', async (req, res) => {
   try {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5000';
+    const frontendUrl = getBaseUrl(req);
     const db = getDatabase();
     
     const sessions = db.prepare(`
@@ -79,7 +91,7 @@ router.get('/all', async (req, res) => {
 router.get('/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5000';
+    const frontendUrl = getBaseUrl(req);
     const db = getDatabase();
     
     const session = db.prepare('SELECT * FROM sessions WHERE sessionId = ?').get(sessionId);
